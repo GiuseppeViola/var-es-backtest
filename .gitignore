@@ -1,0 +1,11 @@
+# Local data (downloaded with scripts/download_data.py, not published)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+.venv/

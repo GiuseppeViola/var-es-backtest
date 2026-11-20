@@ -1,0 +1,28 @@
+# Package metadata (PEP 621).
+# Install in editable mode from the repository root:  pip install -e .
+
+[build-system]
+# Tool that turns src/varbacktest into an installable package.
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "varbacktest"
+version = "0.1.0"
+description = "One-day VaR/ES estimation and backtesting for a buy-and-hold equity portfolio"
+readme = "README.md"
+requires-python = ">=3.11"
+# Loose lower bounds: what the package needs to run.
+# Exact tested versions are pinned in requirements.txt.
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+]
+# yfinance (download script only) is not needed by the package itself:
+# it is installed through requirements.txt.
+
+# The code lives in src/, so it is importable only once installed (pip install -e .).
+[tool.setuptools.packages.find]
+where = ["src"]
