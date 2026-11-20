@@ -13,7 +13,7 @@ description = "One-day VaR/ES estimation and backtesting for a buy-and-hold equi
 readme = "README.md"
 requires-python = ">=3.11"
 # Loose lower bounds: what the package needs to run.
-# Exact tested versions are pinned in requirements.txt.
+# Exact versions used are pinned in requirements.txt.
 dependencies = [
     "numpy>=1.26",
     "pandas>=2.2",
