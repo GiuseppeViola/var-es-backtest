@@ -10,6 +10,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from varbacktest.backtest import (
+    christoffersen_independence,
+    conditional_coverage,
+    exceptions,
+    kupiec_pof,
+    traffic_light,
+)
 from varbacktest.data import (
     ASML_2012_CASH_FRACTION,
     ASML_2012_EX_DATE,
@@ -28,6 +35,8 @@ from varbacktest.var_models import rolling_forecasts
 
 DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "prices.csv"
 LAGS = [1, 5, 10]
+METHODS = ["hs", "gauss", "fhs"]
+LEVELS = {"var99": 0.99, "var975": 0.975}  # forecast column suffix -> confidence level
 
 
 def describe(returns: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -38,6 +47,22 @@ def describe(returns: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         tails[name].update({f"lag{k}": rho for k, rho in zip(LAGS, autocorrelation(r, LAGS))})
         clustering[name] = {f"lag{k}": rho for k, rho in zip(LAGS, autocorrelation(r**2, LAGS))}
     return pd.DataFrame(tails).T, pd.DataFrame(clustering).T
+
+
+def coverage_tests(hits: pd.DataFrame) -> pd.DataFrame:
+    """One row per (method, VaR level): exception count and the three LR tests."""
+    rows = {}
+    for column, h in hits.items():
+        level = LEVELS[column.split("_")[1]]  # column "{method}_{suffix}", e.g. "hs_var99" -> 0.99
+        lr_pof, p_pof = kupiec_pof(h, level)
+        lr_ind, p_ind = christoffersen_independence(h)
+        lr_cc, p_cc = conditional_coverage(h, level)
+        rows[column] = {"T": len(h), "x": h.sum(), "expected": len(h) * (1 - level),
+                        "x/T %": 100 * h.mean(), "LR_pof": lr_pof, "p_pof": p_pof,
+                        "LR_ind": lr_ind, "p_ind": p_ind, "LR_cc": lr_cc, "p_cc": p_cc,
+                        "reject_pof": p_pof < 0.05, "reject_cc": p_cc < 0.05}
+    # Transposing mixed rows gives object columns: infer_objects restores int, float and bool.
+    return pd.DataFrame(rows).T.infer_objects()
 
 
 def main() -> None:
@@ -77,6 +102,40 @@ def main() -> None:
     print(f"\nForecasts for {t.date()} (%):")
     print(pct.iloc[-1].round(2).to_string())
     print(f"Realised loss on {t.date()}: {-100 * r_p.iloc[-1]:.2f}%")
+
+    # Backtesting: compare each forecast with the realised loss L_t = -r_{p,t} of the same day.
+    losses = -r_p.loc[forecasts.index]
+    # Hit sequences, one column per "{method}_{suffix}" (same names as the forecast columns).
+    hits = pd.DataFrame({f"{m}_{suffix}": exceptions(losses, forecasts[f"{m}_{suffix}"])
+                         for m in METHODS for suffix in LEVELS})
+
+    print("\nCoverage tests (reject at 5%: p < 0.05; critical values chi2(1) 3.84, chi2(2) 5.99):")
+    print(coverage_tests(hits).round(3).to_string())
+
+    year = hits.index.year.rename("year")
+    counts = hits.groupby(year).sum()
+    days = hits.groupby(year).size()
+    yearly = pd.concat([days.rename("days"),
+                        (days * 0.01).round(1).rename("exp99"),
+                        counts[[f"{m}_var99" for m in METHODS]],
+                        (days * 0.025).round(1).rename("exp975"),
+                        counts[[f"{m}_var975" for m in METHODS]]], axis=1)
+    print("\nExceptions per calendar year (exp = expected):")
+    print(yearly.to_string())
+
+    print("\nBasel traffic light, VaR 99%, rolling 250 days: % of days in each zone")
+    zones, last = {}, {}
+    for m in METHODS:
+        tl = traffic_light(hits[f"{m}_var99"])
+        zones[m] = 100 * tl["zone"].value_counts(normalize=True)
+        last[m] = f"{tl['zone'].iloc[-1]} ({tl['count'].iloc[-1]} exceptions)"
+    shares = pd.DataFrame(zones).T
+    # A zone never reached is missing from value_counts: show it as 0%.
+    shares = shares.reindex(columns=["green", "yellow", "red"]).fillna(0)
+    print(shares.round(1).to_string())
+    print(f"Zone on the last 250 days (to {hits.index[-1].date()}):")
+    for m in METHODS:
+        print(f"  {m}: {last[m]}")
 
 
 if __name__ == "__main__":
