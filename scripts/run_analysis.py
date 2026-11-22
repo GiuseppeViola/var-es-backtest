@@ -24,11 +24,10 @@ from varbacktest.returns import (
     portfolio_returns,
     simple_returns,
 )
-from varbacktest.var_models import gaussian_var_es, historical_var_es
+from varbacktest.var_models import rolling_forecasts
 
 DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "prices.csv"
 LAGS = [1, 5, 10]
-WINDOW = 250  # estimation window, in trading days
 
 
 def describe(returns: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -65,19 +64,18 @@ def main() -> None:
     print("\nVolatility clustering: ACF of r^2")
     print(clustering.round(3).to_string())
 
-    # One-day forecast for the last date t: window = the 250 days before t, weights = w_{t-1}.
-    # FHS needs the EWMA volatilities, which come with the rolling forecasts.
-    t = returns.index[-1]
-    window = returns.iloc[-WINDOW - 1:-1]
-    w = weights.iloc[-1]  # row t already holds w_{t-1} (see buy_and_hold_weights)
-    rows = {}
-    for name, method in [("historical", historical_var_es), ("gaussian", gaussian_var_es)]:
-        var99, _ = method(window, w, 0.99)
-        var975, es975 = method(window, w, 0.975)
-        rows[name] = {"VaR 99%": var99, "VaR 97.5%": var975, "ES 97.5%": es975}
-    print(f"\nOne-day forecast for {t.date()} (window {window.index[0].date()} to "
-          f"{window.index[-1].date()}), % of portfolio value:")
-    print((100 * pd.DataFrame(rows).T).round(2).to_string())
+    # Rolling one-day forecasts: row t uses only data up to t-1.
+    forecasts = rolling_forecasts(returns, weights, window=250, burn_in=250, lam=0.94)
+    pct = 100 * forecasts
+    print(f"\nEvaluation period: {forecasts.index[0].date()} to {forecasts.index[-1].date()}, "
+          f"{len(forecasts)} days. Forecasts, % of portfolio value:")
+    summary = pd.DataFrame({"mean": pct.mean(), "min": pct.min(), "max": pct.max(),
+                            "date of max": pct.idxmax().dt.date})
+    print(summary.round(2).to_string())
+
+    t = forecasts.index[-1]
+    print(f"\nForecasts for {t.date()} (%):")
+    print(pct.iloc[-1].round(2).to_string())
     print(f"Realised loss on {t.date()}: {-100 * r_p.iloc[-1]:.2f}%")
 
 

@@ -1,8 +1,12 @@
-"""One-day VaR and ES on a single window: historical, Gaussian and filtered historical simulation.
+"""One-day VaR and ES: historical, Gaussian and filtered historical simulation.
 
-Every function receives the stock returns of the estimation window (days s = t-n, ..., t-1)
-and the current weights w_{t-1}, and returns the forecast (VaR_t, ES_t) for day t.
-All methods apply the scenarios to the current weights (static portfolio over one day).
+Single window: each *_var_es function receives the stock returns of the estimation
+window (days s = t-n, ..., t-1) and the current weights w_{t-1}, and returns the
+forecast (VaR_t, ES_t) for day t. All methods apply the scenarios to the current
+weights (static portfolio over one day).
+
+Rolling: ewma_volatility gives the per-stock volatility forecasts needed by FHS, and
+rolling_forecasts moves the window through the sample, one forecast per day.
 """
 
 import numpy as np
@@ -146,3 +150,80 @@ def fhs_var_es(
     z = r / sigma_s                # n x k standardised residuals
     stock_scenarios = z * sigma_t  # broadcast: column i rescaled by sigma_{i,t}
     return scenario_var_es(stock_scenarios @ w, level)
+
+
+def ewma_volatility(returns: pd.DataFrame, lam: float = 0.94, burn_in: int = 250) -> pd.DataFrame:
+    """EWMA volatility forecasts, one column per stock (RiskMetrics, zero mean).
+
+    Initial condition, from the burn-in returns 0, ..., burn_in-1 only:
+        sigma^2_{i,burn_in} = (1/burn_in) * sum_{s < burn_in} r_{i,s}^2
+    (zero-mean variance, the same assumption as the recursion). Then, for t > burn_in:
+        sigma^2_{i,t} = lam * sigma^2_{i,t-1} + (1 - lam) * r_{i,t-1}^2
+    lam = 0.94 is the RiskMetrics value for daily data: the weight of r^2_{t-k} decays
+    as lam^(k-1), with half-life ln(0.5)/ln(lam) ~ 11 days, so sigma reacts to a shock
+    within about two weeks.
+    Row t is the forecast for day t, built with returns up to t-1 (same row
+    convention as buy_and_hold_weights). Rows before burn_in are NaN: there is
+    not enough past data for a forecast without look-ahead.
+
+    Units: volatility per day, as a fraction of value. No sign convention (r enters
+    squared), no confidence level. Data used: returns up to t-1.
+    """
+    if not 0 < lam < 1:
+        raise ValueError("lam must be strictly between 0 and 1")
+    r = returns.to_numpy(dtype=float)
+    if not 0 < burn_in < len(r):
+        raise ValueError("burn_in must be between 1 and the number of days - 1")
+    sigma2 = np.full_like(r, np.nan)
+    sigma2[burn_in] = np.mean(r[:burn_in] ** 2, axis=0)  # returns 0..burn_in-1 only
+    for t in range(burn_in + 1, len(r)):
+        sigma2[t] = lam * sigma2[t - 1] + (1 - lam) * r[t - 1] ** 2  # r[t-1], never r[t]
+    return pd.DataFrame(np.sqrt(sigma2), index=returns.index, columns=returns.columns)
+
+
+def rolling_forecasts(
+    returns: pd.DataFrame,
+    weights: pd.DataFrame,
+    window: int = 250,
+    burn_in: int = 250,
+    lam: float = 0.94,
+) -> pd.DataFrame:
+    """Daily one-day VaR 99%, VaR 97.5% and ES 97.5% forecasts for HS, Gaussian and FHS.
+
+    For each forecast day t the inputs are: the stock returns of days t-window, ..., t-1,
+    the weights w_{t-1} (row t of `weights`, see buy_and_hold_weights) and, for FHS,
+    the EWMA volatilities of the same days plus sigma_t (see ewma_volatility).
+    Evaluation period: t >= burn_in + window. FHS needs sigma_s for every day
+    s = t-window, ..., t-1 of its window, and the first EWMA forecast is
+    sigma_{burn_in}; hence t - window >= burn_in. HS and Gaussian could start
+    `burn_in` days earlier: those days are dropped on purpose, so that all methods
+    are backtested on the same dates.
+
+    Output: one row per forecast day t, columns '<method>_var99', '<method>_var975',
+    '<method>_es975' with method in {hs, gauss, fhs}.
+    Units: fraction of portfolio value. Sign: VaR and ES are positive for a loss.
+    Confidence levels: 99% and 97.5%. Data used: for row t, data up to t-1 only.
+    """
+    if not (returns.columns.equals(weights.columns) and returns.index.equals(weights.index)):
+        raise ValueError("returns and weights must have the same dates and stocks, in the same order")
+    first = burn_in + window
+    if window < 2 or first >= len(returns):
+        raise ValueError("need window >= 2 and more than burn_in + window days")
+    sigma = ewma_volatility(returns, lam, burn_in).to_numpy()
+    r = returns.to_numpy(dtype=float)
+    w_all = weights.to_numpy(dtype=float)
+
+    rows = []
+    for t in range(first, len(r)):
+        past = slice(t - window, t)  # days t-window, ..., t-1: never day t
+        past_returns, w = r[past], w_all[t]  # w_all[t] = w_{t-1}
+        past_sigma, sigma_t = sigma[past], sigma[t]
+        row = {}
+        row["hs_var99"], _ = historical_var_es(past_returns, w, 0.99)
+        row["hs_var975"], row["hs_es975"] = historical_var_es(past_returns, w, 0.975)
+        row["gauss_var99"], _ = gaussian_var_es(past_returns, w, 0.99)
+        row["gauss_var975"], row["gauss_es975"] = gaussian_var_es(past_returns, w, 0.975)
+        row["fhs_var99"], _ = fhs_var_es(past_returns, past_sigma, sigma_t, w, 0.99)
+        row["fhs_var975"], row["fhs_es975"] = fhs_var_es(past_returns, past_sigma, sigma_t, w, 0.975)
+        rows.append(row)
+    return pd.DataFrame(rows, index=returns.index[first:])
