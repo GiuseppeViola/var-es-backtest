@@ -24,6 +24,7 @@ from varbacktest.data import (
     align_dates,
     load_prices,
 )
+from varbacktest.plots import plot_losses_and_var, plot_traffic_light, plot_zoom
 from varbacktest.returns import (
     autocorrelation,
     buy_and_hold_weights,
@@ -33,7 +34,9 @@ from varbacktest.returns import (
 )
 from varbacktest.var_models import rolling_forecasts
 
-DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "prices.csv"
+ROOT = Path(__file__).resolve().parents[1]
+DATA_FILE = ROOT / "data" / "prices.csv"
+FIGURES = ROOT / "figures"
 LAGS = [1, 5, 10]
 METHODS = ["hs", "gauss", "fhs"]
 LEVELS = {"var99": 0.99, "var975": 0.975}  # forecast column suffix -> confidence level
@@ -110,7 +113,8 @@ def main() -> None:
                          for m in METHODS for suffix in LEVELS})
 
     print("\nCoverage tests (reject at 5%: p < 0.05; critical values chi2(1) 3.84, chi2(2) 5.99):")
-    print(coverage_tests(hits).round(3).to_string())
+    tests = coverage_tests(hits)
+    print(tests.round(3).to_string())
 
     year = hits.index.year.rename("year")
     counts = hits.groupby(year).sum()
@@ -136,6 +140,28 @@ def main() -> None:
     print(f"Zone on the last 250 days (to {hits.index[-1].date()}):")
     for m in METHODS:
         print(f"  {m}: {last[m]}")
+
+    # Summary for the README: accuracy (exceptions, tests) next to its cost (mean VaR and ES).
+    report = pd.DataFrame({
+        "x 99%": tests.loc[[f"{m}_var99" for m in METHODS], "x"].to_numpy(),
+        "p_cc 99%": tests.loc[[f"{m}_var99" for m in METHODS], "p_cc"].to_numpy(),
+        "x 97.5%": tests.loc[[f"{m}_var975" for m in METHODS], "x"].to_numpy(),
+        "p_cc 97.5%": tests.loc[[f"{m}_var975" for m in METHODS], "p_cc"].to_numpy(),
+        "mean VaR 99% (%)": [100 * forecasts[f"{m}_var99"].mean() for m in METHODS],
+        "mean ES 97.5% (%)": [100 * forecasts[f"{m}_es975"].mean() for m in METHODS],
+        "yellow days (%)": [shares.loc[m, "yellow"] for m in METHODS],
+        "red days (%)": [shares.loc[m, "red"] for m in METHODS],
+    }, index=METHODS)
+    print(f"\nSummary ({len(hits)} days; expected exceptions {0.01 * len(hits):.1f} at 99%, "
+          f"{0.025 * len(hits):.1f} at 97.5%):")
+    print(report.round(3).to_string())
+
+    FIGURES.mkdir(exist_ok=True)
+    plot_losses_and_var(losses, forecasts, hits, FIGURES / "losses_var.png")
+    plot_zoom(losses, forecasts, "2008-06-01", "2009-12-31", FIGURES / "zoom_2008.png")
+    plot_zoom(losses, forecasts, "2020-01-01", "2020-12-31", FIGURES / "zoom_2020.png")
+    plot_traffic_light(hits, FIGURES / "traffic_light.png")
+    print(f"\nFigures saved in {FIGURES}")
 
 
 if __name__ == "__main__":
