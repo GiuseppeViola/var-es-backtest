@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.ticker import MaxNLocator
 
-from varbacktest.backtest import traffic_light
+from varbacktest_functional.backtest import traffic_light
 
 METHODS = {  # column prefix -> (label, colour)
     "hs": ("Historical simulation", "#2a78d6"),

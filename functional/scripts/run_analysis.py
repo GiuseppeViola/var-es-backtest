@@ -10,29 +10,29 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from varbacktest.backtest import (
+from varbacktest_functional.backtest import (
     christoffersen_independence,
     conditional_coverage,
     exceptions,
     kupiec_pof,
     traffic_light,
 )
-from varbacktest.data import (
+from varbacktest_functional.data import (
     ASML_2012_CASH_FRACTION,
     ASML_2012_EX_DATE,
     adjust_cash_distribution,
     align_dates,
     load_prices,
 )
-from varbacktest.plots import plot_losses_and_var, plot_traffic_light, plot_zoom
-from varbacktest.returns import (
+from varbacktest_functional.plots import plot_losses_and_var, plot_traffic_light, plot_zoom
+from varbacktest_functional.returns import (
     autocorrelation,
     buy_and_hold_weights,
     excess_kurtosis,
     portfolio_returns,
     simple_returns,
 )
-from varbacktest.var_models import rolling_forecasts
+from varbacktest_functional.var_models import rolling_forecasts
 
 ROOT = Path(__file__).resolve().parents[2]  # repository root: functional/scripts/ -> ../..
 DATA_FILE = ROOT / "data" / "prices.csv"
