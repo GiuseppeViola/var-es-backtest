@@ -1,4 +1,4 @@
-"""VaR backtesting: hit sequence and likelihood-ratio (LR) coverage tests.
+"""VaR backtesting: hit sequence, likelihood-ratio (LR) coverage tests, Basel traffic light.
 
 A VaR forecast at confidence level alpha (`level` in the code) is correct if the hit sequence
     I_t = 1 if L_t > VaR_t, else 0
@@ -26,6 +26,15 @@ from scipy.special import xlogy
 from scipy.stats import chi2
 
 SIGNIFICANCE = 0.05  # reject H0 when p-value < 5%
+
+# Basel traffic light (MAR99.17): exceptions of the 99% VaR in the last 250 days.
+# With X ~ Binomial(250, 0.01): P(X <= 4) = 89.22%, P(X <= 5) = 95.88%,
+# P(X <= 9) = 99.97%, P(X <= 10) = 99.99%; the yellow ("amber") zone starts where
+# P(X <= x) reaches 95%, the red zone where it reaches 99.99%.
+BASEL_WINDOW = 250
+BASEL_LEVEL = 0.99
+BASEL_MAX_GREEN = 4    # green: 0-4 exceptions
+BASEL_MAX_YELLOW = 9   # yellow: 5-9; red: 10 or more
 
 
 # ---------------------------------------------------------------- result of one test
@@ -316,3 +325,51 @@ class BacktestResult:
     def conditional_coverage(self) -> LRTest:
         """Christoffersen conditional coverage test at `level`; recomputed at each access."""
         return conditional_coverage_test(self.hits, self.level)
+
+    # ------------------------------------------------------------ views by date
+
+    def _check_dates(self) -> None:
+        if not isinstance(self.hits.index, pd.DatetimeIndex):
+            raise ValueError("this view needs hits indexed by date")
+
+    def exceptions_per_year(self) -> pd.DataFrame:
+        """Exceptions per calendar year, next to the number expected if the model is correct.
+
+        Columns: days (days in the evaluation period that year), exceptions,
+        expected = days (1 - level). No units (counts). Confidence level: `level`.
+        Data used: the hit sequence.
+        """
+        self._check_dates()
+        year = self.hits.index.year.rename("year")
+        days = self.hits.groupby(year).size()
+        exceptions = self.hits.groupby(year).sum()
+        return pd.DataFrame({
+            "days": days,
+            "exceptions": exceptions,
+            "expected": days * (1 - self.level),
+        })
+
+    def traffic_light(self) -> pd.DataFrame:
+        """Basel traffic light on a rolling 250-day window.
+
+        count_t = number of exceptions on days t-249, ..., t (day t included);
+        zone: green 0-4, yellow 5-9 ("amber" in Basel MAR99), red >= 10.
+        Rows start on the first day with a full window. Basel counts the exceptions
+        of the last 250 trading days (MAR32.3); computing the zone every day is a
+        monitoring choice.
+        Columns: count (int), zone (str). Only for the 99% VaR: the thresholds are
+        derived from Binomial(250, 0.01). Data used: hits up to and including day t
+        (ex post, as a supervisor would do on day t).
+        """
+        self._check_dates()
+        if not np.isclose(self.level, BASEL_LEVEL):
+            raise ValueError("the Basel zones are defined for the 99% VaR only")
+        if self.n_days < BASEL_WINDOW:
+            raise ValueError(f"need at least {BASEL_WINDOW} days")
+        count = self.hits.rolling(BASEL_WINDOW).sum().dropna().astype(int)
+        zone = np.select(
+            [count <= BASEL_MAX_GREEN, count <= BASEL_MAX_YELLOW],
+            ["green", "yellow"],
+            default="red",
+        )
+        return pd.DataFrame({"count": count, "zone": zone}, index=count.index)
