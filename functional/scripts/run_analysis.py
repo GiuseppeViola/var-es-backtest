@@ -2,7 +2,7 @@
 
 Run from the repository root, after scripts/download_data.py:
 
-    python scripts/run_analysis.py
+    python functional/scripts/run_analysis.py
 """
 
 from pathlib import Path
@@ -34,7 +34,7 @@ from varbacktest.returns import (
 )
 from varbacktest.var_models import rolling_forecasts
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # repository root: functional/scripts/ -> ../..
 DATA_FILE = ROOT / "data" / "prices.csv"
 FIGURES = ROOT / "figures"
 LAGS = [1, 5, 10]
