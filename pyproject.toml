@@ -2,7 +2,7 @@
 # Install in editable mode from the repository root:  pip install -e .
 
 [build-system]
-# Tool that turns functional/src/varbacktest into an installable package.
+# Tool that turns the packages below into installable packages.
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
@@ -23,6 +23,7 @@ dependencies = [
 # yfinance (download script only) is not needed by the package itself:
 # it is installed through requirements.txt.
 
-# src layout: the package lives in functional/src/, so it is importable only after pip install -e .
+# src layout: the packages live in src/ (varbacktest) and functional/src/
+# (varbacktest_functional), so they are importable only after pip install -e .
 [tool.setuptools.packages.find]
-where = ["functional/src"]
+where = ["src", "functional/src"]
