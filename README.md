@@ -51,8 +51,7 @@ All methods apply the scenarios to the current weights `w_{t-1}`:
   empirical quantile of `-X_s`, ES the mean of the losses at or beyond VaR.
 - **Gaussian**: mean μ and covariance Σ of the stock returns in the window, `μ_p = wᵀμ`,
   `σ_p = sqrt(wᵀΣw)`; `VaR = -μ_p + σ_p z_α`, `ES = -μ_p + σ_p φ(z_α)/(1-α)`, with α the confidence level, Φ and φ the standard normal CDF and density, and `z_α = Φ⁻¹(α)`.
-- **FHS**: EWMA variance per stock, `σ²_{i,t} = λσ²_{i,t-1} + (1-λ)r²_{i,t-1}`, λ = 0.94, zero mean, started from the mean squared return of the first 250 days (burn-in). Residuals `z_{i,s} = r_{i,s}/σ_{i,s}`,
-  with σ_{i,s} the same EWMA on day s (data up to s-1), are rescaled to today's volatility, `x_{i,s} = z_{i,s}σ_{i,t}`, taking all stocks on the same day s together to keep their correlation; then HS on `X_s = Σ_i w_{i,t-1} x_{i,s}`.
+- **FHS**: EWMA variance per stock, `σ²_{i,t} = λσ²_{i,t-1} + (1-λ)r²_{i,t-1}`, λ = 0.94, zero mean, started from the mean squared return of the first 250 days (burn-in). Residuals `z_{i,s} = r_{i,s}/σ_{i,s}`, with σ_{i,s} the same EWMA on day s (data up to s-1), are rescaled to today's volatility, `x_{i,s} = z_{i,s}σ_{i,t}`, taking all stocks on the same day s together to keep their correlation; then HS on `X_s = Σ_i w_{i,t-1} x_{i,s}`.
 
 All methods are evaluated on the same 5,048 days (2006-12-11 to 2026-11-19), after the burn-in and the first window.
 
@@ -108,7 +107,9 @@ python scripts/run_analysis.py    # prints the tables, writes figures/
 
 Yahoo may revise past prices, so a new download can change the numbers slightly.
 
-Code: `src/varbacktest/` (`data`, `returns`, `var_models`, `backtest`, `plots`).
+Code: `src/varbacktest/` (`data`, `portfolio`, `statistics`, `models`, `forecasting`, `backtest`, `plots`).
+`functional/` holds the first, function-based version of the same analysis;
+`python functional/scripts/run_analysis.py` prints the same results.
 
 ## AI statement
 
