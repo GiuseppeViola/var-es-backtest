@@ -16,13 +16,7 @@ import numpy as np
 import pandas as pd
 
 from varbacktest.backtest import BacktestResult
-from varbacktest.data import (
-    ASML_2012_CASH_FRACTION,
-    ASML_2012_EX_DATE,
-    adjust_cash_distribution,
-    align_dates,
-    load_prices,
-)
+from varbacktest.data import align_dates, load_prices
 from varbacktest.forecasting import rolling_forecasts
 from varbacktest.models import (
     FilteredHistoricalSimulation,
@@ -49,10 +43,8 @@ Backtests = dict[str, dict[str, BacktestResult]]
 
 
 def build_portfolio() -> Portfolio:
-    """Load the prices, correct the ASML 2012 cash distribution, keep the common dates."""
-    raw = load_prices(DATA_FILE)
-    corrected = adjust_cash_distribution(raw, "ASML.AS", ASML_2012_EX_DATE, ASML_2012_CASH_FRACTION)
-    prices, n_dropped = align_dates(corrected)
+    """Load the prices and keep the dates on which every exchange was open."""
+    prices, n_dropped = align_dates(load_prices(DATA_FILE))
     print(f"Aligned sample: {prices.index[0].date()} to {prices.index[-1].date()}, "
           f"{len(prices)} dates ({n_dropped} dropped: not all exchanges open)")
     return Portfolio(prices)

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yfinance as yf
 
-TICKERS = ["SAP.DE", "ASML.AS", "TTE.PA", "SAN.MC", "ENEL.MI"]
+TICKERS = ["TTE.PA", "DTE.DE", "SAN.MC", "NOKIA.HE", "ENEL.MI"]
 START = "2005-01-01"
 # Fixed end date, exclusive in yfinance, so the last possible row is 2026-11-19
 # (the actual last date is recorded in download_info.txt).
