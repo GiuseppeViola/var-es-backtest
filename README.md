@@ -108,8 +108,8 @@ python scripts/run_analysis.py    # prints the tables, writes figures/
 Yahoo may revise past prices, so a new download can change the numbers slightly.
 
 Code: `src/varbacktest/` (`data`, `portfolio`, `statistics`, `models`, `forecasting`, `backtest`, `plots`).
-`functional/` holds the first, function-based version of the same analysis;
-`python functional/scripts/run_analysis.py` prints the same results.
+The first, function-based version, run on the original portfolio, is kept at the tag
+[`v1-functional`](https://github.com/GiuseppeViola/var-es-backtest/tree/v1-functional).
 
 ## AI statement
 

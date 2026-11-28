@@ -23,7 +23,6 @@ dependencies = [
 # yfinance (download script only) is not needed by the package itself:
 # it is installed through requirements.txt.
 
-# src layout: the packages live in src/ (varbacktest) and functional/src/
-# (varbacktest_functional), so they are importable only after pip install -e .
+# src layout: the package lives in src/, so it is importable only after pip install -e .
 [tool.setuptools.packages.find]
-where = ["src", "functional/src"]
+where = ["src"]
